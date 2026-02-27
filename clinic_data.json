@@ -17,7 +17,18 @@
                     "breakEnd": "14:00",
                     "status": "available",
                     "available": true,
-                    "booked_appointments": []
+                    "booked_appointments": [
+                        {
+                            "time": "9AM",
+                            "patient_name": "Waqar",
+                            "phone_number": "03001234567"
+                        },
+                        {
+                            "time": "09:10AM",
+                            "patient_name": "Waqar",
+                            "phone_number": "03001234567"
+                        }
+                    ]
                 },
                 {
                     "slot_id": "S102",
@@ -57,7 +68,14 @@
                     "breakStart": "14:00",
                     "breakEnd": "15:00",
                     "status": "available",
-                    "available": true
+                    "available": true,
+                    "booked_appointments": [
+                        {
+                            "time": "09:30",
+                            "patient_name": "Marko",
+                            "phone_number": "0704420611"
+                        }
+                    ]
                 },
                 {
                     "slot_id": "S202",
@@ -77,7 +95,14 @@
                     "breakStart": "14:00",
                     "breakEnd": "15:00",
                     "status": "available",
-                    "available": true
+                    "available": true,
+                    "booked_appointments": [
+                        {
+                            "time": "7am",
+                            "patient_name": "Nabeel",
+                            "phone_number": "03222336495"
+                        }
+                    ]
                 }
             ]
         },
