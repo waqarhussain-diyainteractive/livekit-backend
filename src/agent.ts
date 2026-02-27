@@ -22,6 +22,8 @@ import { z } from 'zod';
 
 dotenv.config({ path: '.env.local' });
 
+process.env.PORT = '7860';
+
 // --- DATABASE HELPERS ---
 const DB_PATH = path.resolve(process.cwd(), 'clinic_data.json');
 
