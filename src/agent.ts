@@ -377,6 +377,7 @@ export default defineAgent({
       console.log('✅ Connected to LiveKit Room');
 
       const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY!, profanityFilter: true });
+      // const llm_model = new inference.LLM({ model: 'openai/gpt-4.1-mini' });
       const llm_model = new inference.LLM({ model: 'gpt-4o-mini' });
       const tts = new elevenlabs.TTS({
         apiKey: process.env.ELEVEN_API_KEY!, enableLogging: true, voiceId: process.env.ELEVEN_VOICE_ID!, language: 'en', model: 'eleven_flash_v2_5'
