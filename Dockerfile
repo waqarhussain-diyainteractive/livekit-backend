@@ -32,5 +32,8 @@ RUN pnpm download-files
 # Set Production mode
 ENV NODE_ENV=production
 
+# FORCE Hugging Face Port
+ENV PORT=7860
+
 # Start the agent
 CMD [ "pnpm", "start" ]
