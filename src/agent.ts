@@ -390,7 +390,7 @@ export default defineAgent({
       await session.start({ agent: agentInstance, room: ctx.room, inputOptions: { noiseCancellation: BackgroundVoiceCancellation() }});
 
       console.log('✅ AI Session Started successfully');
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       await session.say(
         `Hello! Welcome to Health 4 Travel. I am ${agentInstance.agentName}, your Smart Clinic Assistant. Which city are you looking to book a doctor in today?`
@@ -404,5 +404,5 @@ export default defineAgent({
 
 cli.runApp(new ServerOptions({ 
   agent: fileURLToPath(import.meta.url),
-  port: 7860 
+  port: process.env.PORT ? parseInt(process.env.PORT) : 7860 
 }));
