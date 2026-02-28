@@ -377,7 +377,11 @@ export default defineAgent({
       });
 
       const session = new voice.AgentSession({
-        stt: stt, llm: llm_model, tts: tts, turnDetection: new livekit.turnDetector.MultilingualModel(), vad: ctx.proc.userData.vad! as silero.VAD,
+        stt: stt, 
+        llm: llm_model, 
+        tts: tts, 
+        // turnDetection: new livekit.turnDetector.MultilingualModel(), 
+        vad: ctx.proc.userData.vad! as silero.VAD,
         voiceOptions: { preemptiveGeneration: true, allowInterruptions: true, minInterruptionDuration: 1.2, minInterruptionWords: 5, minEndpointingDelay: 0.6, maxEndpointingDelay: 3.0, maxToolSteps: 10 },
       });
 
