@@ -11,7 +11,7 @@ import {
 
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as elevenlabs from '@livekit/agents-plugin-elevenlabs';
-// import * as livekit from '@livekit/agents-plugin-livekit';
+import * as livekit from '@livekit/agents-plugin-livekit';
 import * as silero from '@livekit/agents-plugin-silero';
 import { BackgroundVoiceCancellation } from '@livekit/noise-cancellation-node';
 import dotenv from 'dotenv';
@@ -362,9 +362,9 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
 }
 
 export default defineAgent({
-  // prewarm: async (proc: JobProcess) => {
-  //   proc.userData.vad = await silero.VAD.load();
-  // },
+  prewarm: async (proc: JobProcess) => {
+    proc.userData.vad = await silero.VAD.load();
+  },
   entry: async (ctx: JobContext) => {
     try {
       await ctx.connect();
@@ -376,16 +376,8 @@ export default defineAgent({
         apiKey: process.env.ELEVEN_API_KEY!, enableLogging: true, voiceId: process.env.ELEVEN_VOICE_ID!, language: 'en', model: 'eleven_flash_v2_5'
       });
 
-      console.log('⏳ Loading VAD model...');
-      const vadModel = await silero.VAD.load();
-      console.log('✅ VAD model loaded!');
-
       const session = new voice.AgentSession({
-        stt: stt, 
-        llm: llm_model, 
-        tts: tts, 
-        // turnDetection: new livekit.turnDetector.MultilingualModel(), 
-        vad: vadModel,
+        stt: stt, llm: llm_model, tts: tts, turnDetection: new livekit.turnDetector.MultilingualModel(), vad: ctx.proc.userData.vad! as silero.VAD,
         voiceOptions: { preemptiveGeneration: true, allowInterruptions: true, minInterruptionDuration: 1.2, minInterruptionWords: 5, minEndpointingDelay: 0.6, maxEndpointingDelay: 3.0, maxToolSteps: 10 },
       });
 
