@@ -96,18 +96,11 @@ const CITY_IMAGES: Record<string, string> = {
 class Health4TravelAgent extends voice.Agent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private room: any;
-  public userName: string;
   public agentName: string;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(metadata: string, room: any) {
-    let clientName = 'Patient';
-    try {
-      const parsed = JSON.parse(metadata);
-      if (parsed.clientName) clientName = parsed.clientName;
-    } catch (e) {}
-
-    const agentName = 'James';
+  constructor(room: any) {
+    const agentName = 'Alexa';
 
     // Get real-time date logic so the LLM understands "Today"
     const today = new Date();
@@ -117,7 +110,7 @@ class Health4TravelAgent extends voice.Agent {
 
     super({
       instructions: `# Persona & Tone
-You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are assisting ${clientName} with booking a doctor's appointment.
+You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are assisting a patient with booking a doctor's appointment.
 - Use a highly professional, polite, and reassuring tone.
 - Use very short, simple sentences. One or two sentences maximum per turn.
 - Speak in plain text. NEVER use markdown (no bold, no italics), lists, or symbols.
@@ -131,7 +124,7 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
 - If they ask for "next week Monday", just pass "MONDAY".
 
 # Conversational Flow
-1. Greet the patient by name (${clientName}) and ask them which city they are traveling to.
+1. Greet the patient and ask them which city they are traveling to.
 2. When they mention a city (like Amsterdam, Paris, Vaasa), IMMEDIATELY call the 'showCityImage' tool silently.
 3. PAY ATTENTION to the result of 'showCityImage':
    - If the tool says the city is fully booked, IMMEDIATELY tell the user: "I apologize, but all our slots in [City] are currently booked. Would you like to check another location?"
@@ -139,8 +132,8 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
 4. IF they ask "What days are you open?" or "Show me available days", use the 'checkAvailableDays' tool.
 5. Once they provide a specific day (or say today/tomorrow), use the 'checkAvailableSlots' tool.
 6. Tell the user: "I have displayed the available appointment times on your screen. Please let me know which one you prefer, or just tap the button on your screen."
-7. Once they choose a time, ask for their Phone Number to draft the booking.
-8. Once you have their phone number, use the 'draftBooking' tool to show a pending ticket on their screen. **IMMEDIATELY ask the user: "Are you confirm booking on [Day] and [Time]?"**
+7. Once they choose a time, ask for their First Name and Phone Number to draft the booking.
+8. Once you have their name and phone number, use the 'draftBooking' tool to show a pending ticket on their screen. **IMMEDIATELY ask the user: "Are you confirm booking on [Day] and [Time]?"**
 9. IF the user says "Yes", "Confirm", or "Book it", use the 'confirmBooking' tool to save it to the database.
 10. IF the user says "No", "Cancel", or "Cancel my booking", immediately use the 'cancelBooking' tool.
 
@@ -226,14 +219,15 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
         }),
 
         draftBooking: llm.tool({
-          description: 'Draft the appointment and show a pending ticket for the user to confirm BEFORE saving it to the database. Use this after getting the phone number.',
+          description: 'Draft the appointment and show a pending ticket for the user to confirm BEFORE saving it to the database. Use this after getting the name and phone number.',
           parameters: z.object({
             city: z.string(),
             day: z.string(),
             time: z.string(),
+            patient_name: z.string(),
             phone_number: z.string(),
           }),
-          execute: async ({ city, day, time, phone_number }) => {
+          execute: async ({ city, day, time, patient_name, phone_number }) => {
             const db = loadClinicData();
             let targetClinic = db.clinics.find((c: any) => c.city.toLowerCase() === city.toLowerCase());
             if (!targetClinic) return `Booking failed. Invalid city.`;
@@ -243,7 +237,7 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
 
             const ticket = {
               status: "PENDING CONFIRMATION",
-              patient_name: clientName, 
+              patient_name: patient_name, 
               phone_number: phone_number, 
               day: day.toUpperCase(), 
               time: time,
@@ -268,9 +262,10 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
             city: z.string(),
             day: z.string(),
             time: z.string(),
+            patient_name: z.string(),
             phone_number: z.string(),
           }),
-          execute: async ({ city, day, time, phone_number }) => {
+          execute: async ({ city, day, time, patient_name, phone_number }) => {
             const db = loadClinicData();
             let targetClinic = null; 
             let targetShift = null;
@@ -295,12 +290,12 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
             }
 
             // Save to database
-            targetShift.booked_appointments.push({ time: time, patient_name: clientName, phone_number: phone_number });
+            targetShift.booked_appointments.push({ time: time, patient_name: patient_name, phone_number: phone_number });
             saveClinicData(db);
 
             const ticket = {
               status: "CONFIRMED ✅",
-              patient_name: clientName, 
+              patient_name: patient_name, 
               phone_number: phone_number, 
               day: day.toUpperCase(), 
               time: time,
@@ -362,7 +357,6 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
     });
 
     this.room = room;
-    this.userName = clientName;
     this.agentName = agentName;
   }
 }
@@ -377,8 +371,7 @@ export default defineAgent({
       console.log('✅ Connected to LiveKit Room');
 
       const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY!, profanityFilter: true });
-      // const llm_model = new inference.LLM({ model: 'openai/gpt-4.1-mini' });
-      const llm_model = new inference.LLM({ model: 'gpt-4o-mini' });
+      const llm_model = new inference.LLM({ model: 'openai/gpt-4.1-mini' });
       const tts = new elevenlabs.TTS({
         apiKey: process.env.ELEVEN_API_KEY!, enableLogging: true, voiceId: process.env.ELEVEN_VOICE_ID!, language: 'en', model: 'eleven_flash_v2_5'
       });
@@ -388,13 +381,7 @@ export default defineAgent({
         voiceOptions: { preemptiveGeneration: true, allowInterruptions: true, minInterruptionDuration: 1.2, minInterruptionWords: 5, minEndpointingDelay: 0.6, maxEndpointingDelay: 3.0, maxToolSteps: 10 },
       });
 
-      let participantMetadata = '{}';
-      const remoteParticipants = Array.from(ctx.room.remoteParticipants.values());
-      if (remoteParticipants.length > 0) {
-        if (remoteParticipants[0]?.metadata) participantMetadata = remoteParticipants[0].metadata;
-      }
-
-      const agentInstance = new Health4TravelAgent(participantMetadata, ctx.room);
+      const agentInstance = new Health4TravelAgent(ctx.room);
 
       const usageCollector = new metrics.UsageCollector();
       session.on(voice.AgentSessionEventTypes.MetricsCollected, (ev) => { metrics.logMetrics(ev.metrics); usageCollector.collect(ev.metrics); });
@@ -406,7 +393,7 @@ export default defineAgent({
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       await session.say(
-        `Hello ${agentInstance.userName}! Welcome to Health 4 Travel. I am ${agentInstance.agentName}, your Smart Clinic Assistant. Which city are you looking to book a doctor in today?`
+        `Hello! Welcome to Health 4 Travel. I am ${agentInstance.agentName}, your Smart Clinic Assistant. Which city are you looking to book a doctor in today?`
       );
 
     } catch (error) {
