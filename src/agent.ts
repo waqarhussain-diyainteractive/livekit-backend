@@ -100,7 +100,7 @@ class Health4TravelAgent extends voice.Agent {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(room: any) {
-    const agentName = 'Alexa';
+    const agentName = 'Maria';
 
     // Get real-time date logic so the LLM understands "Today"
     const today = new Date();
