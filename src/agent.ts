@@ -393,7 +393,7 @@ export default defineAgent({
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       await session.say(
-        `Hello! Welcome to Health 4 Travel. I am ${agentInstance.agentName}, your Smart Clinic Assistant. Which city are you looking to book a doctor in today?`
+        `Hello! Welcome to Health 4 Travel. I am ${agentInstance.agentName},  and I will help you book an appointment with doctor. Which city are you looking to book a doctor in today?`
       );
 
     } catch (error) {
