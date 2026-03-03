@@ -38,42 +38,73 @@ function saveClinicData(data: any) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 4), 'utf-8');
 }
 
-// 10-Minute Slot Generator
+// --- TIME HELPER (Universal Formatting) ---
+function normalizeTime(timeStr: string): string | null {
+  if (!timeStr || timeStr === "0:00" || timeStr === "00:00") return null;
+  const cleanStr = timeStr.toLowerCase().replace(/\s/g, ''); 
+  
+  let hours = 0;
+  let minutes = 0;
+  
+  const isPM = cleanStr.includes('pm');
+  const isAM = cleanStr.includes('am');
+  const timeOnly = cleanStr.replace('am', '').replace('pm', '');
+  
+  if (timeOnly.includes(':')) {
+    const parts = timeOnly.split(':');
+    hours = parseInt(parts[0] || '0', 10);
+    minutes = parseInt(parts[1] || '0', 10) || 0;
+  } else {
+    hours = parseInt(timeOnly || '0', 10);
+  }
+  
+  if (isNaN(hours)) return null;
+  if (isPM && hours < 12) hours += 12;
+  if (isAM && hours === 12) hours = 0;
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+// --- SLOT GENERATOR ---
 function get10MinSlots(shift: any): string[] {
   const slots: string[] = [];
   if (!shift.startTime || !shift.endTime || shift.available === false || shift.status === 'booked') {
     return slots;
   }
 
-  const parseTime = (timeStr: string) => {
-    if (!timeStr || timeStr === "0:00" || timeStr === "00:00") return null;
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return new Date(2000, 0, 1, hours, minutes, 0, 0);
+  const startStr = normalizeTime(shift.startTime);
+  const endStr = normalizeTime(shift.endTime);
+  const bStartStr = normalizeTime(shift.breakStart);
+  const bEndStr = normalizeTime(shift.breakEnd);
+
+  if (!startStr || !endStr) return slots;
+
+  const toDate = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return new Date(2000, 0, 1, h, m);
   };
 
-  const formatTime = (d: Date) => {
-    return d.toTimeString().substring(0, 5); // Returns "HH:MM"
-  };
+  const start = toDate(startStr);
+  const end = toDate(endStr);
+  const bStart = bStartStr ? toDate(bStartStr) : null;
+  const bEnd = bEndStr ? toDate(bEndStr) : null;
 
-  const start = parseTime(shift.startTime);
-  const end = parseTime(shift.endTime);
-  const bStart = parseTime(shift.breakStart);
-  const bEnd = parseTime(shift.breakEnd);
-
-  if (!start || !end) return slots;
+  const formatTime = (d: Date) => d.toTimeString().substring(0, 5); // Returns "HH:MM"
 
   let curr = start;
   while (curr.getTime() + 10 * 60000 <= end.getTime()) {
     let isBreak = false;
-    if (bStart && bEnd) {
-      if (curr.getTime() >= bStart.getTime() && curr.getTime() < bEnd.getTime()) {
-        isBreak = true;
-      }
+    if (bStart && bEnd && curr.getTime() >= bStart.getTime() && curr.getTime() < bEnd.getTime()) {
+      isBreak = true;
     }
 
     let isBooked = false;
     if (shift.booked_appointments) {
-      isBooked = shift.booked_appointments.some((b: any) => b.time === formatTime(curr));
+      const currFormatted = formatTime(curr);
+      isBooked = shift.booked_appointments.some((b: any) => {
+        const normalizedDbTime = normalizeTime(b.time);
+        return normalizedDbTime === currFormatted;
+      });
     }
 
     if (!isBreak && !isBooked) {
@@ -110,40 +141,44 @@ class Health4TravelAgent extends voice.Agent {
 
     super({
       instructions: `# Persona & Tone
-You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are assisting a patient with booking a doctor's appointment.
-- Use a highly professional, polite, and reassuring tone.
-- Use very short, simple sentences. One or two sentences maximum per turn.
-- Speak in plain text. NEVER use markdown (no bold, no italics), lists, or symbols.
-- Spell out numbers and times (e.g., "nine A M" instead of "9:00 AM").
+You are ${agentName}, a premium Global Medical Concierge for Health4Travel. You assist international patients with booking doctor appointments seamlessly.
+- Tone: Highly professional, warm, reassuring, and culturally accommodating.
+- Language: Speak in clear, simple, and universally understood English. Keep sentences very short. One or two sentences maximum per turn.
+- Spoken Times: Always speak times naturally (e.g., say "two thirty P M" instead of "14:30"). 
+- Text: Speak in plain text ONLY. No markdown, no symbols, no lists.
+- CRITICAL: NEVER read long lists of available time slots. It sounds robotic and overwhelming over the phone.
 
 # CRITICAL TIME CONTEXT
 - Today is ${currentDayName}.
 - Tomorrow is ${tomorrowDayName}.
-- If the user says "today", you must pass "${currentDayName}" into your tools. 
-- If the user says "tomorrow", you must pass "${tomorrowDayName}" into your tools.
-- If they ask for "next week Monday", just pass "MONDAY".
+- If the user says "today", pass "${currentDayName}" into your tools. 
+- If the user says "tomorrow", pass "${tomorrowDayName}" into your tools.
 
-# Conversational Flow
+# Conversational Flow (STEP BY STEP)
 1. Greet the patient and ask them which city they are traveling to.
-2. When they mention a city (like Amsterdam, Paris, Vaasa), IMMEDIATELY call the 'showCityImage' tool silently.
-3. PAY ATTENTION to the result of 'showCityImage':
-   - If the tool says the city is fully booked, IMMEDIATELY tell the user: "I apologize, but all our slots in [City] are currently booked. Would you like to check another location?"
-   - Only if the tool says the city has slots, ask them what day they would prefer.
-4. IF they ask "What days are you open?" or "Show me available days", use the 'checkAvailableDays' tool.
-5. Once they provide a specific day (or say today/tomorrow), use the 'checkAvailableSlots' tool.
-6. Tell the user: "I have displayed the available appointment times on your screen. Please let me know which one you prefer, or just tap the button on your screen."
-7. Once they choose a time, ask for their First Name and Phone Number to draft the booking.
-8. Once you have their name and phone number, use the 'draftBooking' tool to show a pending ticket on their screen. **IMMEDIATELY ask the user: "Are you confirm booking on [Day] and [Time]?"**
-9. IF the user says "Yes", "Confirm", or "Book it", use the 'confirmBooking' tool to save it to the database.
-10. IF the user says "No", "Cancel", or "Cancel my booking", immediately use the 'cancelBooking' tool.
+2. When they mention a city, IMMEDIATELY call 'showCityImage' silently.
+   - If booked out: Apologize warmly and ask if they want to check another city.
+   - If slots exist: Ask them what day they would prefer.
+3. IF they ask "What days are you open?", use the 'checkAvailableDays' tool.
+4. Once they provide a specific day, use the 'checkAvailableSlots' tool.
+   - DO NOT read the array of available slots!
+   - Look at the tool data. If there is a break time, say: "The clinic is open from [Open Time] to [Close Time], with a break from [Break Start] to [Break End]. Appointments are 10 minutes long. What time works best for you?"
+   - If there is NO break time, simply say: "The clinic is open from [Open Time] to [Close Time]. Appointments are 10 minutes long. What time works best for you?"
+5. The user will ask for a specific time (e.g., "10:30 AM").
+   - CHECK the 'available_slots' array from your tool data.
+   - IF THEIR TIME IS IN THE ARRAY: Say "Excellent, [Time] is available." and ask for their First Name and Phone Number.
+   - IF THEIR TIME IS NOT IN THE ARRAY (IT IS BOOKED): Say "I apologize, but [Time] is already taken." Then look at the 'available_slots' array and politely suggest the 1 or 2 times closest to what they asked for. (e.g., "I have an opening right before that at 10:20 AM, or a bit later at 10:40 AM. Would either of those suit your schedule?")
+6. Once you have an agreed time, name, and phone number, use the 'draftBooking' tool to securely record their information.
+   - IMMEDIATELY ask: "May I go ahead and confirm this appointment for [Day] at [Time]?"
+7. IF they say "Yes" or "Confirm", use 'confirmBooking'. IF they say "No" or "Cancel", use 'cancelBooking'.
 
 # Tool Usage Rules
-- NEVER ask permission to show an image or slots. Just do it silently.
-- Do not mention the names of your internal tools to the user.`,
+- NEVER ask permission to use tools. Just do it silently.
+- Do not mention the names of your internal tools or databases to the user.`,
 
       tools: {
         showCityImage: llm.tool({
-          description: 'Show an image of the clinic location and immediately check if it has ANY available slots.',
+          description: 'Load clinic data and immediately check if it has ANY available slots.',
           parameters: z.object({ city: z.string() }),
           execute: async ({ city }) => {
             const db = loadClinicData();
@@ -155,14 +190,13 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
 
             if (this.room) await this.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
 
-            // Check if there are ANY available slots in this city
             const hasAvailableSlots = clinic.slots.some((s: any) => s.available && s.status !== 'booked');
 
             if (!hasAvailableSlots) {
-              return `Image shown. WARNING: There are NO available slots in ${city}. All slots are booked out. Tell the user immediately that booking is not available in ${city} and ask if they want to check another city.`;
+              return `WARNING: There are NO available slots in ${city}. All slots are booked out. Tell the user immediately that booking is not available in ${city} and ask if they want to check another city.`;
             }
 
-            return `Image of ${city} clinic shown on screen. The clinic has availability. Ask the user what day they would prefer.`;
+            return `Clinic data loaded. The clinic has availability. Ask the user what day they would prefer.`;
           }
         }),
 
@@ -182,10 +216,10 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
         }),
 
         checkAvailableSlots: llm.tool({
-          description: 'Check available 10-minute appointment slots for a specific day and push buttons to the user screen.',
+          description: 'Get the business hours, break times, and a list of open 10-minute slots to help the user pick a time.',
           parameters: z.object({
             city: z.string().describe('The city name'),
-            day: z.string().describe('The day of the week (e.g., MONDAY). DO NOT PASS "TODAY", pass the actual name of the day.'),
+            day: z.string().describe('The day of the week (e.g., MONDAY). DO NOT PASS "TODAY".'),
           }),
           execute: async ({ city, day }) => {
             const db = loadClinicData();
@@ -193,33 +227,45 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
             if (!clinic) return `No slots found in ${city}.`;
 
             const targetDay = day.toUpperCase();
-            const availableShifts = clinic.slots.filter((s: any) => s.day === targetDay && s.available && s.status !== 'booked');
+            const shift = clinic.slots.find((s: any) => s.day === targetDay && s.available && s.status !== 'booked');
 
-            if (availableShifts.length === 0) {
+            if (!shift) {
               return `I'm sorry, we don't have any available slots on ${targetDay} in ${city}. Please ask them for another day.`;
             }
 
-            const allGeneratedSlots: any[] = [];
-            for (const shift of availableShifts) {
-              const times = get10MinSlots(shift);
-              for (const t of times) {
-                allGeneratedSlots.push({ start_time: t, day: shift.day, clinic_name: clinic.clinic_name, slot_id: shift.slot_id });
-              }
-            }
+            // Generate exact available times, automatically skipping breaks and booked slots
+            const availableTimes = get10MinSlots(shift);
 
-            if (allGeneratedSlots.length === 0) {
+            if (availableTimes.length === 0) {
               return `I'm sorry, all slots for ${targetDay} are currently booked out.`;
             }
 
-            const payload = JSON.stringify({ type: 'show_slots', slots: allGeneratedSlots });
-            if (this.room) await this.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
+            // Check if a valid break actually exists
+            const bStart = normalizeTime(shift.breakStart);
+            const bEnd = normalizeTime(shift.breakEnd);
+            const hasBreak = bStart !== null && bEnd !== null;
 
-            return `Found ${allGeneratedSlots.length} available slots. The buttons are now visible on the screen. Ask them to select a specific time.`;
+            // Build the schedule data dynamically
+            const scheduleData: any = {
+              business_hours: { open: shift.startTime, close: shift.endTime },
+              available_slots: availableTimes
+            };
+
+            if (hasBreak) {
+              scheduleData.break_time = { start: shift.breakStart, end: shift.breakEnd };
+            }
+
+            const instructionText = hasBreak 
+              ? "State the business hours and the break time, then ask what time they want." 
+              : "State the business hours, then ask what time they want. DO NOT mention a break time because there is no break.";
+
+            return `Here is the schedule data: ${JSON.stringify(scheduleData)}. 
+            AI INSTRUCTION: ${instructionText} DO NOT READ THE AVAILABLE SLOTS ARRAY. Only use the array if their requested time is missing, so you can suggest the closest adjacent times. Convert all 24-hour times into friendly AM/PM formats when speaking to the user.`;
           }
         }),
 
         draftBooking: llm.tool({
-          description: 'Draft the appointment and show a pending ticket for the user to confirm BEFORE saving it to the database. Use this after getting the name and phone number.',
+          description: 'Draft the appointment data BEFORE saving it to the database. Use this after getting the name and phone number.',
           parameters: z.object({
             city: z.string(),
             day: z.string(),
@@ -232,15 +278,14 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
             let targetClinic = db.clinics.find((c: any) => c.city.toLowerCase() === city.toLowerCase());
             if (!targetClinic) return `Booking failed. Invalid city.`;
 
-            // Close the slots side panel so it doesn't clutter the screen
-            const closeSlotsPayload = JSON.stringify({ type: 'close_slots' });
+            const normalizedRequestTime = normalizeTime(time) || time;
 
             const ticket = {
               status: "PENDING CONFIRMATION",
               patient_name: patient_name, 
               phone_number: phone_number, 
               day: day.toUpperCase(), 
-              time: time,
+              time: normalizedRequestTime,
               clinic_name: targetClinic.clinic_name, 
               address: targetClinic.streetAddress || targetClinic.address
             };
@@ -248,11 +293,10 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
             const payload = JSON.stringify({ type: 'show_ticket', ticket: ticket });
             
             if (this.room) {
-              await this.room.localParticipant.publishData(new TextEncoder().encode(closeSlotsPayload), { reliable: true });
               await this.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
             }
 
-            return `Pending ticket shown on screen. You MUST ask the user exactly: "Are you confirm booking on ${day} and ${time}?"`;
+            return `Booking prepared. You MUST ask the user exactly: "May I go ahead and confirm this appointment for ${day} at ${normalizedRequestTime}?"`;
           }
         }),
 
@@ -285,12 +329,19 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
             if (!targetClinic || !targetShift) return `Confirmation failed. Invalid city or day.`;
             if (!targetShift.booked_appointments) targetShift.booked_appointments = [];
             
-            if (targetShift.booked_appointments.some((b:any) => b.time === time)) {
-              return `I'm sorry, that specific time slot was just taken. Pick another time.`;
+            // Normalize the requested time so it perfectly matches the database
+            const normalizedRequestTime = normalizeTime(time);
+            
+            if (targetShift.booked_appointments.some((b:any) => normalizeTime(b.time) === normalizedRequestTime)) {
+              return `I apologize, but that specific time slot was just taken. Please suggest another nearby time.`;
             }
 
-            // Save to database
-            targetShift.booked_appointments.push({ time: time, patient_name: patient_name, phone_number: phone_number });
+            // Save clean format to database (e.g., "09:10")
+            targetShift.booked_appointments.push({ 
+              time: normalizedRequestTime, 
+              patient_name: patient_name, 
+              phone_number: phone_number 
+            });
             saveClinicData(db);
 
             const ticket = {
@@ -298,7 +349,7 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
               patient_name: patient_name, 
               phone_number: phone_number, 
               day: day.toUpperCase(), 
-              time: time,
+              time: normalizedRequestTime,
               clinic_name: targetClinic.clinic_name, 
               address: targetClinic.streetAddress || targetClinic.address
             };
@@ -311,7 +362,7 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
               await this.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
             }
 
-            return `Successfully saved to database. Tell the user their ticket is confirmed and they are all set!`;
+            return `Successfully saved to database. Tell the user their appointment is fully confirmed and thank them for choosing Health 4 Travel.`;
           }
         }),
 
@@ -325,13 +376,14 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
           execute: async ({ city, day, time }) => {
             const db = loadClinicData();
             let foundAndDeleted = false;
+            const normalizedRequestTime = normalizeTime(time);
 
             for (const c of db.clinics) {
               if (c.city.toLowerCase() === city.toLowerCase()) {
                 for (const s of c.slots) {
                   if (s.day === day.toUpperCase() && s.booked_appointments) {
                     const initialLength = s.booked_appointments.length;
-                    s.booked_appointments = s.booked_appointments.filter((b:any) => b.time !== time);
+                    s.booked_appointments = s.booked_appointments.filter((b:any) => normalizeTime(b.time) !== normalizedRequestTime);
                     if (s.booked_appointments.length < initialLength) {
                       foundAndDeleted = true;
                     }
@@ -340,16 +392,14 @@ You are ${agentName}, the AI Medical Receptionist for Health4Travel. You are ass
               }
             }
 
-            // Always clear the ticket from the UI, regardless of DB presence 
-            // (e.g., if they decline the draft confirmation)
             const closeTicketPayload = JSON.stringify({ type: 'show_ticket', ticket: null });
             if (this.room) await this.room.localParticipant.publishData(new TextEncoder().encode(closeTicketPayload), { reliable: true });
 
             if (foundAndDeleted) {
               saveClinicData(db);
-              return `The appointment for ${day} at ${time} has been successfully cancelled from the database. Inform the user.`;
+              return `The appointment for ${day} at ${time} has been successfully cancelled from the database. Inform the user gracefully.`;
             } else {
-              return `The draft booking has been cancelled and cleared from the screen.`;
+              return `The draft booking has been cancelled. Ask the user if they need help with anything else.`;
             }
           }
         }),
@@ -371,7 +421,9 @@ export default defineAgent({
       console.log('✅ Connected to LiveKit Room');
 
       const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY!, profanityFilter: true });
-      const llm_model = new inference.LLM({ model: 'openai/gpt-4.1-mini' });
+      
+      const llm_model = new inference.LLM({ model: 'openai/gpt-4o-mini' });
+      
       const tts = new elevenlabs.TTS({
         apiKey: process.env.ELEVEN_API_KEY!, enableLogging: true, voiceId: process.env.ELEVEN_VOICE_ID!, language: 'en', model: 'eleven_flash_v2_5'
       });
