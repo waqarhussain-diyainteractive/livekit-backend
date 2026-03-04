@@ -186,7 +186,7 @@ You are ${agentName}, a premium Global Medical Concierge for Health4Travel. You 
             if (!clinic) return `No clinic found in ${city}.`;
 
             const imageUrl = CITY_IMAGES[city.toLowerCase()] || CITY_IMAGES['amsterdam'];
-            const payload = JSON.stringify({ type: 'show_image', url: imageUrl, title: clinic.clinic_name });
+            const payload = JSON.stringify({ type: 'show_image', url: imageUrl, title: clinic.city });
 
             if (this.room) await this.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
 
@@ -445,7 +445,7 @@ export default defineAgent({
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       await session.say(
-        `Hello! Welcome to Health 4 Travel. I am ${agentInstance.agentName},  and I will help you book an appointment with doctor. Which city are you looking to book a doctor in today?`
+        `Hello! Welcome to Health 4 Travel. I am ${agentInstance.agentName}, and I will help you book an appointment with doctor. Which city are you looking to book a doctor in today?`
       );
 
     } catch (error) {
