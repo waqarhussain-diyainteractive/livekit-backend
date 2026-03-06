@@ -345,7 +345,7 @@ You are ${agentName}, a premium Global Medical Concierge for Health4Travel. You 
             saveClinicData(db);
 
             const ticket = {
-              status: "CONFIRMED ✅",
+              status: "CONFIRMED",
               patient_name: patient_name, 
               phone_number: phone_number, 
               day: day.toUpperCase(), 
@@ -362,7 +362,7 @@ You are ${agentName}, a premium Global Medical Concierge for Health4Travel. You 
               await this.room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
             }
 
-            return `Successfully saved to database. Tell the user their appointment is fully confirmed and thank them for choosing Health 4 Travel.`;
+            return `Successfully saved to database. Tell the user EXACTLY: "Your appointment is confirmed. Thank you for using Health 4 Travel. Have a wonderful day!" and do not say anything else.`;
           }
         }),
 
